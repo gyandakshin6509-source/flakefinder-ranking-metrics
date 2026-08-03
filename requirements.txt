@@ -1,0 +1,11 @@
+# FlakeFinder ranking-metrics extension — pipeline dependencies.
+# Pinned to the versions used to produce outputs/metrics/*.csv and
+# outputs/qc_report.md. Tested on Python 3.14 (Windows).
+#
+# scipy and pandas are listed in CLAUDE.md as allowed dependencies but
+# are not imported by any src/*.py module; not pinned here. Re-add if a
+# future change introduces them.
+
+numpy==2.4.0
+opencv-python==4.13.0.92
+matplotlib==3.10.8

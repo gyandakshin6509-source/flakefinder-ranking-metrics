@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Lab scan data and generated results are not part of this repository.
+data/
+outputs/
