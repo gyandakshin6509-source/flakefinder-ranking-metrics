@@ -99,35 +99,13 @@ def load_scan_meta(path: str) -> dict[str, Any]:
 
 
 def get_frame_dims(meta: dict[str, Any]) -> tuple[int, int]:
-    """
-    Return (width_px, height_px) from scan_meta camera sub-dict.
-
-    Parameters
-    ----------
-    meta : dict
-        Parsed scan_meta.json.
-
-    Returns
-    -------
-    (W, H) as ints.
-    """
+    """Return (width_px, height_px) from the scan_meta camera sub-dict."""
     cam = meta["camera"]
     return int(cam["frame_width_px"]), int(cam["frame_height_px"])
 
 
 def get_pixel_um(meta: dict[str, Any]) -> float:
-    """
-    Return the sample-plane pixel size in µm from scan_meta optics.
-
-    Parameters
-    ----------
-    meta : dict
-        Parsed scan_meta.json.
-
-    Returns
-    -------
-    Sample-plane pixel pitch in µm (sample_pixel_x_um).
-    """
+    """Sample-plane pixel pitch in µm, straight off scan_meta optics."""
     return float(meta["optics"]["sample_pixel_x_um"])
 
 

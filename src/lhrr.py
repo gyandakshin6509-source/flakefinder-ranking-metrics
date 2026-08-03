@@ -43,30 +43,28 @@ VARIANCE_KERNEL_UM: float = 5.0
 VARIANCE_PERCENTILE: int = 50
 CROP_PAD_PX: int = 30
 
-# Minimum effective LHRR side length (µm) for the "usable" quality flag,
-# per material preset. The default value (20 µm) was calibrated against hBN;
-# graphene flakes are typically smaller, so a tighter threshold differentiates
-# the population. Both values are conservative, and the lab should re-tune to
-# their actual stamp tolerances.
+# Minimum effective LHRR side length (µm) to call a flake "usable", per
+# material. 20 µm came out of the hBN data. Graphene flakes run smaller, and at
+# 20 µm essentially the whole graphene population flagged marginal, which made
+# the flag useless, hence 10. Both are conservative guesses at a stamp
+# tolerance rather than measured values.
 LHRR_USEFUL_THRESHOLD_UM_BY_MATERIAL: dict[str, float] = {
-    "hbn_medium":         20.0,
+    "hbn_medium": 20.0,
     "graphene_thin_90nm": 10.0,
 }
 DEFAULT_LHRR_USEFUL_THRESHOLD_UM: float = 15.0
 _warned_unknown_materials: set[str] = set()
 
+# None means accept every classification string. Tighten once someone has
+# enumerated what the classifier can actually emit.
 LHRR_CLASSIFICATION_ALLOWLIST: dict[str, list[str] | None] = {
-    "hbn_medium":         None,
+    "hbn_medium": None,
     "graphene_thin_90nm": None,
 }
 
 
 def _useful_threshold_um(material: str | None) -> float:
-    """
-    Look up the LHRR usable-side threshold for a given material preset.
-    Falls back to DEFAULT_LHRR_USEFUL_THRESHOLD_UM and prints a one-time
-    warning if the material is unknown.
-    """
+    """Usable-side threshold for a material, with a one-time warning on fallback."""
     if material is not None and material in LHRR_USEFUL_THRESHOLD_UM_BY_MATERIAL:
         return LHRR_USEFUL_THRESHOLD_UM_BY_MATERIAL[material]
     key = material if material is not None else "<None>"
@@ -129,20 +127,10 @@ def save_lhrr_figure(
     variance_percentile: int | None = None,
 ) -> dict[str, Any]:
     """
-    Compute LHRR and save a 4-panel diagnostic PNG to out_path.
+    Compute LHRR and write a 4-panel diagnostic PNG to out_path.
 
-    Returns the same result dict as compute_lhrr.
-
-    Parameters
-    ----------
-    chip_dir : Path
-    label : str
-    flatfield : np.ndarray
-    out_path : Path
-        Destination .png file path.
-    material : str | None
-    variance_percentile : int | None
-        Override VARIANCE_PERCENTILE for this call. None uses the module default.
+    Arguments are the same as compute_lhrr plus the destination path, and the
+    return value is the same result dict.
     """
     result, diag = _compute_lhrr_impl(chip_dir, label, flatfield, material,
                                       diagnostics=True,
@@ -194,18 +182,9 @@ def _largest_rect_in_histogram(
     row_idx: int,
 ) -> tuple[int, int, int, int] | None:
     """
-    Largest rectangle in a histogram via stack algorithm, O(N).
-
-    Parameters
-    ----------
-    heights : 1-D int array
-        Height of consecutive True pixels above each column at the current row.
-    row_idx : int
-        Current row index in the original mask.
-
-    Returns
-    -------
-    (col_left, row_top, width, height) or None if all heights are zero.
+    Classic O(N) stack pass. heights[c] is how many True pixels sit above
+    column c at row_idx. Returns (col_left, row_top, width, height), or None
+    when the whole row is empty.
     """
     stack: list[int] = []
     best_area = 0
@@ -259,7 +238,6 @@ def _compute_lhrr_impl(
     Core implementation. Returns (result_dict, diag_dict | None).
     diag_dict is only populated when diagnostics=True.
     """
-    # Step 0: detection lookup + classification gate
     det, frame_entry, meta = lookup_detection(chip_dir, label)
 
     if material is not None:
@@ -269,7 +247,6 @@ def _compute_lhrr_impl(
             if cls not in allowlist:
                 return _null_result("classification_mismatch"), None
 
-    # Step 1: load and correct raw frame
     _, frame_n, _ = _parse_label_parts(label)
     frame_jpg = chip_dir / "scan_10x" / f"frame_{frame_n:04d}.jpg"
     if not frame_jpg.exists():
@@ -283,12 +260,12 @@ def _compute_lhrr_impl(
     W, H = get_frame_dims(meta)
     pixel_um = get_pixel_um(meta)
 
-    # Step 2: build flake mask + dilated mask
     mask_full = build_flake_mask(det, H, W)
 
     kernel_px = _odd_round(VARIANCE_KERNEL_UM / pixel_um)
 
-    # Small-flake guard
+    # If the flake is smaller than the kernel footprint the variance map ends up
+    # describing the kernel rather than the surface, so shrink the kernel.
     size_px = det.get("size_px", 0)
     if size_px > 0 and size_px < kernel_px ** 2:
         import warnings
@@ -303,10 +280,8 @@ def _compute_lhrr_impl(
     disk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     mask_dilated = cv2.dilate(mask_full.astype(np.uint8), disk).astype(bool)
 
-    # Step 3: crop to bbox + padding
     bbox = det.get("bbox")
     if bbox is None:
-        # compute from mask if bbox missing
         ys, xs = np.where(mask_full)
         if len(xs) == 0:
             return _null_result("empty_mask"), None
@@ -324,19 +299,18 @@ def _compute_lhrr_impl(
     mask_crop = mask_full[row0:row1, col0:col1]
     mask_d_crop = mask_dilated[row0:row1, col0:col1]
 
-    # Step 4: local variance map on green channel (E[X²] - E[X]²)
+    # Local variance on the green channel, via E[X²] - E[X]². Two box filters
+    # is a lot cheaper than a sliding-window var().
     k = kernel_px
     box_kernel = np.ones((k, k), dtype=np.float32) / (k * k)
     mean_map = cv2.filter2D(green_crop, -1, box_kernel)
     mean_sq_map = cv2.filter2D(green_crop ** 2, -1, box_kernel)
     var_map = np.clip(mean_sq_map - mean_map ** 2, 0.0, None)
 
-    # Step 5: adaptive threshold
-    # Variance is computed over the dilated crop (so border pixels get full
-    # neighbourhood context), but the percentile is sampled from the strict
-    # interior only. Dilation buffer pixels have elevated variance by construction
-    # (they straddle the flake edge), so including them would inflate the
-    # threshold and let genuine edge noise through.
+    # Note this samples mask_crop, not mask_d_crop. The variance map needs the
+    # dilated crop so edge pixels get a full neighbourhood, but the buffer
+    # pixels straddle the flake boundary and carry ~2.8x the interior variance.
+    # Letting them into the percentile skews the threshold toward edge noise.
     in_mask_var = var_map[mask_crop]
     if in_mask_var.size == 0:
         return _null_result("empty_mask"), None
@@ -345,14 +319,13 @@ def _compute_lhrr_impl(
     threshold = float(np.percentile(in_mask_var, pct))
     clean_mask = (var_map < threshold) & mask_crop
 
-    # Step 6: largest axis-aligned rectangle in clean_mask
     rect = max_rect_in_binary_mask(clean_mask)
     if rect is None or rect[2] * rect[3] == 0:
         return _null_result("no_clean_region"), None
 
     rx_c, ry_c, rw, rh = rect  # crop-space coordinates
 
-    # Step 7: convert to frame space and stage space
+    # back out to frame space, then to stage µm
     lhrr_bbox_frame = (col0 + rx_c, row0 + ry_c, rw, rh)
     lhrr_bbox_stage = pixel_bbox_to_stage(lhrr_bbox_frame, frame_entry, pixel_um, W, H)
 
@@ -391,7 +364,7 @@ def _compute_lhrr_impl(
 
 
 def _parse_label_parts(label: str) -> tuple[int, int, int]:
-    """Extract (rank, frame_n, d_id) from label without re-importing regex."""
+    """Pull (rank, frame_n, d_id) out of a revisit label."""
     import re
     m = re.match(r"^rank(\d+)_frame_(\d+)_d(\d+)$", label)
     if not m:
