@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import statistics
@@ -43,6 +44,9 @@ from lhrr import compute_lhrr
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).parent.parent
+
+# Default only. Pass --flatfield to point at a different microscope config
+# without touching this file.
 FLATFIELD_PATH = (
     PROJECT_ROOT / "data" / "flakes data" / "flakes data"
     / "flatfields" / "flatfield_10x_bin3.npy"
@@ -285,15 +289,16 @@ def _print_run_summary(run_name: str, records: list[dict[str, Any]]) -> None:
 # Main
 # ---------------------------------------------------------------------------
 
-def main(run_dir: Path) -> None:
+def main(run_dir: Path, flatfield_path: Path | None = None) -> None:
+    flatfield_path = flatfield_path or FLATFIELD_PATH
     if not run_dir.exists():
         print(f"ERROR: run_dir not found: {run_dir}")
         sys.exit(1)
-    if not FLATFIELD_PATH.exists():
-        print(f"ERROR: flatfield not found: {FLATFIELD_PATH}")
+    if not flatfield_path.exists():
+        print(f"ERROR: flatfield not found: {flatfield_path}")
         sys.exit(1)
 
-    flatfield = np.load(str(FLATFIELD_PATH)).astype(np.float32)
+    flatfield = np.load(str(flatfield_path)).astype(np.float32)
     print(f"Flatfield loaded: shape={flatfield.shape}")
 
     chip_dirs = sorted(p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith("chip_"))
@@ -336,7 +341,14 @@ def main(run_dir: Path) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print(f"Usage: python {Path(sys.argv[0]).name} <run_dir>")
-        sys.exit(2)
-    main(Path(sys.argv[1]))
+    parser = argparse.ArgumentParser(
+        description="Compute LHRR + EOP ranking metrics for one FlakeFinder run.")
+    parser.add_argument("run_dir", type=Path,
+                        help="extracted root of one run archive")
+    parser.add_argument("--flatfield", type=Path, default=FLATFIELD_PATH,
+                        metavar="PATH",
+                        help="10x flatfield .npy for your microscope config "
+                             "(defaults to the bundled 10x bin3 flatfield "
+                             "under data/)")
+    args = parser.parse_args()
+    main(args.run_dir, args.flatfield)

@@ -1,0 +1,16 @@
+rank_in_run,chip,material,label,lhrr_area_um2,lhrr_fraction,lhrr_quality_flag,lhrr_skip_reason,clearance_um,weighted_obstruction,eop_score,clearance_warning,eop_skip_reason,lhrr_area_norm,eop_score_norm,composite_score
+1,chip_0,graphene_thin_90nm,rank20_frame_0378_d5,112.713,0.2109,usable,,200.845,0.008144,199.223,False,,0.276787,1.0,0.638394
+2,chip_0,graphene_thin_90nm,rank30_frame_0408_d21,109.077,0.2602,usable,,202.783,0.022749,198.272,False,,0.267858,0.995226,0.631542
+3,chip_0,graphene_thin_90nm,rank64_frame_0067_d31,99.727,0.2299,marginal,,187.953,0.00909,186.26,False,,0.244897,0.934932,0.589915
+4,chip_0,graphene_thin_90nm,rank07_frame_0069_d1,274.25,0.2572,usable,,98.86,0.018207,97.093,False,,0.673469,0.487358,0.580414
+5,chip_1,graphene_thin_90nm,rank25_frame_0357_d12,69.082,0.1338,marginal,,196.0,0.012507,193.579,False,,0.169643,0.97167,0.570657
+6,chip_0,graphene_thin_90nm,rank61_frame_0118_d6,407.22,0.5255,usable,,5.0,1.11264,2.367,True,,1.0,0.011881,0.505941
+7,chip_1,graphene_thin_90nm,rank39_frame_0037_d39,59.213,0.1223,marginal,,154.86,0.061505,145.888,False,,0.145408,0.732285,0.438846
+8,chip_0,graphene_thin_90nm,rank21_frame_0398_d32,68.563,0.1581,marginal,,138.86,0.020169,136.115,False,,0.168368,0.683229,0.425798
+70,chip_1,graphene_thin_90nm,rank05_frame_0160_d42,74.795,0.1782,marginal,,20.0,0.087648,18.388,True,,0.183672,0.092299,0.137986
+71,chip_1,graphene_thin_90nm,rank06_frame_0357_d3,103.883,0.1242,usable,,5.0,0.237755,4.04,True,,0.255103,0.020279,0.137691
+72,chip_1,graphene_thin_90nm,rank19_frame_0144_d32,65.446,0.1226,marginal,,25.984,0.174741,22.119,True,,0.160714,0.111026,0.13587
+73,chip_0,graphene_thin_90nm,rank27_frame_0232_d16,102.844,0.1937,usable,,5.0,0.483369,3.371,True,,0.252551,0.016921,0.134736
+145,chip_1,graphene_thin_90nm,rank34_frame_0122_d37,21.815,0.0435,marginal,,5.0,1.083726,2.4,True,,0.053571,0.012047,0.032809
+146,chip_1,graphene_thin_90nm,rank71_frame_0059_d28,25.451,0.0603,marginal,,5.0,15.650269,0.3,True,,0.062499,0.001506,0.032002
+147,chip_1,graphene_thin_90nm,rank79_frame_0323_d72,15.582,0.0385,marginal,,5.0,0.74391,2.867,True,,0.038264,0.014391,0.026328

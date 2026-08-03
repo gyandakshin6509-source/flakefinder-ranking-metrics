@@ -27,15 +27,49 @@ There's also a composite score combining the two, so the ranked CSV at the end
 reflects usable area and pickup feasibility together rather than one or the
 other.
 
-> **What's in this repo.** Source and documentation only. The lab's raw scan
-> archives, the flatfields, and the generated `outputs/` (ranked CSVs, per-chip
-> JSON, occupancy and LHRR figures) aren't included here. Any numbers quoted
-> below come from running the pipeline on the two archives above.
+> **What's in this repo.** Source, documentation, and a small sample of output.
+> The lab's raw scan archives and flatfields aren't here, and neither is the
+> full generated `outputs/` tree. Any numbers quoted below come from running
+> the pipeline on the two archives above.
 >
 > Why each default is set the way it is, and the measurements behind it, are in
 > [`docs/implementation-notes.md`](docs/implementation-notes.md). The plan I
 > wrote before implementing anything is in
 > [`docs/design-plan.md`](docs/design-plan.md).
+
+---
+
+## What the output looks like
+
+This is `chip_0` of the graphene run, 4157 detections projected into stage
+coordinates. The left panel is the occupancy map that clearance gets measured
+against, the right panel is the obstruction map, where brighter means more
+optical contrast against the substrate and so more of a pickup hazard.
+
+![Chip occupancy and obstruction maps for chip_0 of the graphene run](examples/occupancy_graphene_chip_0.png)
+
+And the top of the ranked CSV for that same run:
+
+| rank | chip | label | lhrr_area_um2 | lhrr_quality_flag | clearance_um | eop_score | clearance_warning | composite_score |
+|---|---|---|---|---|---|---|---|---|
+| 1 | chip_0 | rank20_frame_0378_d5 | 112.713 | usable | 200.845 | 199.223 | False | 0.638394 |
+| 2 | chip_0 | rank30_frame_0408_d21 | 109.077 | usable | 202.783 | 198.272 | False | 0.631542 |
+| 3 | chip_0 | rank64_frame_0067_d31 | 99.727 | marginal | 187.953 | 186.260 | False | 0.589915 |
+| 4 | chip_0 | rank07_frame_0069_d1 | 274.250 | usable | 98.860 | 97.093 | False | 0.580414 |
+| 5 | chip_1 | rank25_frame_0357_d12 | 69.082 | marginal | 196.000 | 193.579 | False | 0.570657 |
+
+Rank 4 is the interesting one. It has by far the largest clean rectangle in the
+run at 274 µm², more than double anything above it, but it sits about half as
+far from its nearest neighbour, so the EOP term drags it down to fourth. That
+tradeoff is the whole point of the composite. Rank 3 shows the other half of
+it: a perfectly well-placed flake that still flags `marginal`, because its
+clean rectangle works out to a ~10 µm side, right at the graphene threshold.
+
+[`examples/ranked_candidates_excerpt.csv`](examples/ranked_candidates_excerpt.csv)
+has 15 rows sampled across the full ranking (top 8, middle, and bottom), which
+between them cover every combination of `lhrr_quality_flag` and
+`clearance_warning`. Stage coordinates are stripped from the excerpt; the real
+output includes them.
 
 ---
 
@@ -47,15 +81,16 @@ Python 3.10 or later.
 pip install -r requirements.txt
 ```
 
-Before running on new data, open `src/flake_metrics.py` and point
-`FLATFIELD_PATH` at the 10x flatfield `.npy` for your microscope config.
+You'll also need the 10x flatfield `.npy` for your own microscope config. Pass
+it with `--flatfield`; the constant `FLATFIELD_PATH` in
+`src/flake_metrics.py` is only the fallback default.
 
 ---
 
 ## Running it
 
 ```
-python src/flake_metrics.py path/to/run_dir
+python src/flake_metrics.py path/to/run_dir [--flatfield path/to/flatfield.npy]
 ```
 
 `run_dir` is the extracted root of one run archive. It handles one archive at a
@@ -287,12 +322,16 @@ score from drifting when the occupancy resolution changes.
 ## Folder layout
 
 ```
-flakefinder/
+flakefinder-ranking-metrics/
 ├── README.md
+├── LICENSE
 ├── requirements.txt
 ├── docs/
 │   ├── design-plan.md            plan written before implementation
 │   └── implementation-notes.md   decisions made while implementing
+├── examples/
+│   ├── occupancy_graphene_chip_0.png    sample chip-wide QC image
+│   └── ranked_candidates_excerpt.csv    15 rows sampled from a real run
 ├── src/
 │   ├── flake_metrics.py          main entrypoint
 │   ├── run_all_metrics.py        runs both archives back to back
@@ -311,3 +350,10 @@ flakefinder/
     ├── metrics/                  ranked CSVs and per-chip JSON
     └── eop/                      chip-wide occupancy QC images
 ```
+
+---
+
+## License
+
+MIT, see [LICENSE](LICENSE). The sample output under `examples/` is derived
+from the lab's scan data and is included with their permission.
