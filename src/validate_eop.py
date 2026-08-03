@@ -1,5 +1,5 @@
 """
-validate_eop.py — Build chip_0 (hBN) occupancy + obstruction maps and run EOP
+validate_eop.py: Build chip_0 (hBN) occupancy + obstruction maps and run EOP
 on the three size-based validation flakes.
 
 Usage:
@@ -58,7 +58,7 @@ def main() -> None:
 
     qc_path = OUT_DIR / "chip_0_occupancy_qc.png"
     save_chip_occupancy_qc(chip_data, qc_path,
-                           title=f"chip_0 hBN — {chip_data['n_detections']} detections")
+                           title=f"chip_0 hBN: {chip_data['n_detections']} detections")
     print(f"  QC image: {qc_path}")
 
     print(f"\n=== Per-flake EOP ===")

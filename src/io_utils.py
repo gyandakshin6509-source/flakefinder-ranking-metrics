@@ -1,5 +1,5 @@
 """
-io_utils.py — shared I/O utilities for FlakeFinder metrics.
+io_utils.py: shared I/O utilities for FlakeFinder metrics.
 
 Provides:
   - parse_revisit_label   label -> (rank, frame_n, d_id)
@@ -165,11 +165,11 @@ def lookup_detection(
 
     Raises
     ------
-    ValueError  — label does not match regex.
-    FileNotFoundError — seg JSON or scan_meta.json missing.
-    KeyError    — 'detections' or 'contour' field absent.
-    IndexError  — d_id out of range for that frame.
-    ValueError  — contour has fewer than 3 points.
+    ValueError: label does not match regex.
+    FileNotFoundError: seg JSON or scan_meta.json missing.
+    KeyError: 'detections' or 'contour' field absent.
+    IndexError: d_id out of range for that frame.
+    ValueError: contour has fewer than 3 points.
     """
     _, frame_n, d_id = parse_revisit_label(label)
 
@@ -201,7 +201,7 @@ def lookup_detection(
         )
     if len(det["contour"]) < 3:
         raise ValueError(
-            f"Contour has {len(det['contour'])} points — too small to form a mask "
+            f"Contour has {len(det['contour'])} points, too small to form a mask "
             f"(label '{label}')"
         )
 

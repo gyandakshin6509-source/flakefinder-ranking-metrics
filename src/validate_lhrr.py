@@ -1,5 +1,5 @@
 """
-validate_lhrr.py — Run LHRR on three size-representative chip_0 flakes and
+validate_lhrr.py: Run LHRR on three size-representative chip_0 flakes and
 save 4-panel diagnostic figures to outputs/lhrr/.
 
 Usage:
@@ -31,7 +31,7 @@ FLATFIELD_NPY = DATA_ROOT / "flakes data" / "flakes data" / "flatfields" / "flat
 OUT_DIR = PROJECT_ROOT / "outputs" / "lhrr"
 
 # ---------------------------------------------------------------------------
-# Validation labels (chip_0, hBN run — size-based selection)
+# Validation labels (chip_0, hBN run: size-based selection)
 # ---------------------------------------------------------------------------
 
 VALIDATION_FLAKES = [

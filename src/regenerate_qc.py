@@ -1,5 +1,5 @@
 """
-regenerate_qc.py — rebuild every chip's occupancy map and save its QC PNG
+regenerate_qc.py: rebuild every chip's occupancy map and save its QC PNG
 under the run-prefixed naming convention. Used once after the chip_N collision
 fix in flake_metrics.py.
 
@@ -51,7 +51,7 @@ def main() -> None:
             qc = EOP_DIR / f"{run_name}_{chip_dir.name}_occupancy.png"
             save_chip_occupancy_qc(
                 cd, qc,
-                title=f"{run_name} / {chip_dir.name} — {cd['n_detections']} detections "
+                title=f"{run_name} / {chip_dir.name}: {cd['n_detections']} detections "
                       f"(material baseline {cd['substrate_baseline']:.1f})",
             )
             print(f"  saved: {qc}")

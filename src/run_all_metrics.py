@@ -1,5 +1,5 @@
 """
-run_all_metrics.py — driver that runs flake_metrics.py on both available
+run_all_metrics.py: driver that runs flake_metrics.py on both available
 extracted runs (hBN + graphene) sequentially, then prints combined summary
 statistics across all candidates.
 

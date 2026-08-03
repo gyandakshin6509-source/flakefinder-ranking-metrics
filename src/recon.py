@@ -204,7 +204,7 @@ def main() -> None:
     # -----------------------------------------------------------------------
     print("Building directory tree ...")
     tree_str, ext_counts = tree_counts(run_hbn)
-    sections.append("## 1. Directory tree — hBN run (SF121 D-J)\n")
+    sections.append("## 1. Directory tree: hBN run (SF121 D-J)\n")
     sections.append("```")
     sections.append(tree_str)
     sections.append("```\n")
@@ -287,7 +287,7 @@ def main() -> None:
 
     if revisit_jsons:
         rv = json.loads(revisit_jsons[0].read_text())
-        sections.append(f"### `seg/revisit_50x.json` — `{revisit_jsons[0].relative_to(run_hbn)}`\n")
+        sections.append(f"### `seg/revisit_50x.json`: `{revisit_jsons[0].relative_to(run_hbn)}`\n")
         if isinstance(rv, list):
             sections.append(f"Top-level: array of {len(rv)} entries. First entry:\n")
             if rv:
@@ -306,7 +306,7 @@ def main() -> None:
         sm = json.loads(summary_jsons[0].read_text())
         # Omit the huge detections_by_frame sub-object from the schema
         sm_schema = {k: v for k, v in sm.items() if k != "detections_by_frame"}
-        sections.append(f"### `seg/summary.json` — `{summary_jsons[0].relative_to(run_hbn)}`\n")
+        sections.append(f"### `seg/summary.json`: `{summary_jsons[0].relative_to(run_hbn)}`\n")
         sections.extend(describe_json_schema(sm_schema))
         if "detections_by_frame" in sm:
             n_frames_with_dets = len(sm["detections_by_frame"])
@@ -347,13 +347,13 @@ def main() -> None:
     # -----------------------------------------------------------------------
     print("Loading flatfield and generating flatfield_check.png ...")
     ff = np.load(str(FLATFIELD_10X_NPY))
-    sections.append("## 6. Flatfield — `flatfield_10x_bin3.npy`\n")
-    sections.append(f"- Shape: `{ff.shape}` (H, W, C) — channel order BGR (matches OpenCV)")
+    sections.append("## 6. Flatfield: `flatfield_10x_bin3.npy`\n")
+    sections.append(f"- Shape: `{ff.shape}` (H, W, C), channel order BGR (matches OpenCV)")
     sections.append(f"- dtype: `{ff.dtype}`")
     sections.append(f"- Value range: [{ff.min():.4f}, {ff.max():.4f}]")
     sections.append(f"- Mean: {ff.mean():.4f}")
     sections.append(f"- Interpretation: multiplicative correction factors; 1.0 = no change")
-    sections.append(f"- Vignetting (from JSON): 18.6% — centre ~{85.5:.1f} DN vs corners ~{69.6:.1f} DN")
+    sections.append(f"- Vignetting (from JSON): 18.6%, centre ~{85.5:.1f} DN vs corners ~{69.6:.1f} DN")
 
     corrected = (raw_frame.astype(np.float32) * ff).clip(0, 255).astype(np.uint8)
 
@@ -396,7 +396,7 @@ def main() -> None:
     sections.append(f"- Confirmed by `optics.sample_pixel_x_um` = `{pixel_um}` in scan_meta.json")
     sections.append("")
     sections.append("Kernel / distance translation table:\n")
-    sections.append("| Physical size (um) | Kernel size (px) — rounded to odd |")
+    sections.append("| Physical size (um) | Kernel size (px): rounded to odd |")
     sections.append("|---|---|")
     for um in [3, 5, 7, 10, 15, 20, 50, 100]:
         px = round(um / pixel_um)

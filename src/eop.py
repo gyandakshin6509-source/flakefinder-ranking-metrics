@@ -1,5 +1,5 @@
 """
-eop.py — Ease of Pickup metric.
+eop.py: Ease of Pickup metric.
 
 For each candidate flake, computes:
   - clearance_um         distance (µm) from candidate boundary to nearest
@@ -81,7 +81,7 @@ def estimate_substrate_baseline(
 
     Returns
     -------
-    (baseline_value, used_fallback) — used_fallback is True when fewer than
+    (baseline_value, used_fallback): used_fallback is True when fewer than
     3 frames produced a usable estimate and the 5th-percentile fallback was used.
     """
     seg_files = sorted((chip_dir / "seg").glob("frame_*.json"))
@@ -157,8 +157,8 @@ def build_chip_occupancy(
 
     Iterates every seg JSON for the chip. For each detection, fills its
     projected stage-coordinate contour into:
-      - occ_map (uint8, 0/255)         — geometric occupancy
-      - obstruction_map (float32)      — max-accumulated raw |Δgreen|
+      - occ_map (uint8, 0/255): geometric occupancy
+      - obstruction_map (float32): max-accumulated raw |Δgreen|
 
     Obstruction is then normalised to [0, 1] by chip-wide max.
 
@@ -179,7 +179,7 @@ def build_chip_occupancy(
         map_origin        (x_min_um, y_min_um)
         stage_px          µm/px scalar
         meta              parsed scan_meta.json
-        substrate_baseline float — chip green-channel baseline
+        substrate_baseline float: chip green-channel baseline
         baseline_fallback bool
         n_detections      total detections written
     """

@@ -1,5 +1,5 @@
 """
-diag_eop_full.py — Three EOP validation diagnostics for chip_0 hBN.
+diag_eop_full.py: Three EOP validation diagnostics for chip_0 hBN.
 
 Order:
   1. Build chip occupancy at 5 µm/px (default).
@@ -58,12 +58,12 @@ NEIGHBOR_RADIUS_UM = 50.0
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 2 — detections within 50 µm of rank02 boundary
+# Diagnostic 2: detections within 50 µm of rank02 boundary
 # ---------------------------------------------------------------------------
 
 def run_diag2() -> None:
     print("\n" + "=" * 78)
-    print(f"DIAG 2 — detections within {NEIGHBOR_RADIUS_UM:.0f} µm of {RANK02_LABEL} boundary")
+    print(f"DIAG 2: detections within {NEIGHBOR_RADIUS_UM:.0f} µm of {RANK02_LABEL} boundary")
     print("=" * 78)
 
     cand_det, cand_frame, meta = lookup_detection(CHIP_DIR, RANK02_LABEL)
@@ -196,12 +196,12 @@ def run_diag2() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 3 — occupancy zoom vs corrected frame side-by-side
+# Diagnostic 3: occupancy zoom vs corrected frame side-by-side
 # ---------------------------------------------------------------------------
 
 def run_diag3(chip_data: dict, flatfield: np.ndarray) -> None:
     print("\n" + "=" * 78)
-    print(f"DIAG 3 — corrected frame_0257 vs occupancy at same FOV — {RANK02_LABEL}")
+    print(f"DIAG 3: corrected frame_0257 vs occupancy at same FOV: {RANK02_LABEL}")
     print("=" * 78)
 
     cand_det, cand_frame, meta = lookup_detection(CHIP_DIR, RANK02_LABEL)
@@ -244,7 +244,7 @@ def run_diag3(chip_data: dict, flatfield: np.ndarray) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     fig.suptitle(
-        f"{RANK02_LABEL} — frame_0257 corrected vs chip occupancy "
+        f"{RANK02_LABEL}: frame_0257 corrected vs chip occupancy "
         f"(FOV = {sx1 - sx0:.0f} × {sy1 - sy0:.0f} µm)",
         fontsize=11,
     )
@@ -266,7 +266,7 @@ def run_diag3(chip_data: dict, flatfield: np.ndarray) -> None:
     ax.plot(cand_stage[:, 0].tolist() + [float(cand_stage[0, 0])],
             cand_stage[:, 1].tolist() + [float(cand_stage[0, 1])],
             color="lime", linewidth=1.5)
-    ax.set_title(f"Chip occupancy (5 µm/px) — same FOV")
+    ax.set_title(f"Chip occupancy (5 µm/px): same FOV")
     ax.set_xlabel("stage x (µm)")
     ax.set_ylabel("stage y (µm)")
     ax.set_xlim(sx0, sx1)
@@ -279,7 +279,7 @@ def run_diag3(chip_data: dict, flatfield: np.ndarray) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Diagnostic 1 — clearance vs occupancy resolution (5, 2, 1 µm/px)
+# Diagnostic 1: clearance vs occupancy resolution (5, 2, 1 µm/px)
 # ---------------------------------------------------------------------------
 
 def _eop_row(label: str, chip_data: dict) -> tuple[float, float]:
@@ -289,7 +289,7 @@ def _eop_row(label: str, chip_data: dict) -> tuple[float, float]:
 
 def _print_diag1_table(rows: dict) -> None:
     print("\n" + "=" * 78)
-    print("DIAG 1 — Resolution sensitivity (clearance µm | EOP score) per OCCUPANCY_STAGE_PX_UM")
+    print("DIAG 1: Resolution sensitivity (clearance µm | EOP score) per OCCUPANCY_STAGE_PX_UM")
     print("=" * 78)
     head = f"  {'flake':<32} {'px=5.0':>20} {'px=2.0':>20} {'px=1.0':>20}"
     print(head)
@@ -343,7 +343,7 @@ def main() -> None:
     del chip_data
     gc.collect()
 
-    # Diag 1 — px=2 and px=1
+    # Diag 1: px=2 and px=1
     for px in (2.0, 1.0):
         print("\n" + "=" * 78)
         print(f"Building chip_0 occupancy at OCCUPANCY_STAGE_PX_UM = {px}")

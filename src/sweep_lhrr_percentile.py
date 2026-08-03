@@ -1,5 +1,5 @@
 """
-sweep_lhrr_percentile.py — Sensitivity check on VARIANCE_PERCENTILE.
+sweep_lhrr_percentile.py: Sensitivity check on VARIANCE_PERCENTILE.
 
 Runs LHRR at percentiles 25, 50, and 75 for the three chip_0 validation
 flakes and saves 4-panel figures to outputs/lhrr_sweep/.

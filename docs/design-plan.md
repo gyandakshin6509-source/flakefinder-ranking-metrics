@@ -1,9 +1,10 @@
-# FlakeFinder Metrics — Phase 2 Implementation Plan
+# FlakeFinder Metrics, Phase 2 Implementation Plan
 
-> _This document captures the Phase 2 plan as of 2026-05-08. Actual implementation
-> may differ in places — see `CLAUDE.md` and `README.md` for current state._
+> This is the Phase 2 plan as it stood on 2026-05-08. Some of it changed once I
+> started implementing. `implementation-notes.md` and `README.md` describe what
+> the code actually does now.
 
-**Status:** Awaiting review before any code is written.
+**Status:** Awaiting review before any code gets written.
 **Prereq scripts run:** `src/recon.py`, `src/_check_plan_prereqs.py`
 
 ---
@@ -12,8 +13,8 @@
 
 ### 0.1 Candidate lookup path
 
-Every revisit candidate is identified by a label such as `"rank01_frame_0432_d1"`.
-The parsing + lookup pipeline is:
+Every revisit candidate is identified by a label like `"rank01_frame_0432_d1"`.
+Parsing and lookup goes like this:
 
 ```
 label  ──► regex match: r"rank(\d+)_frame(\d+)_d(\d+)"
@@ -23,59 +24,65 @@ label  ──► regex match: r"rank(\d+)_frame(\d+)_d(\d+)"
             │
             ├── seg JSON: chip_N/seg/frame_0432.json
             │    └── detections[d_id]          # d_id IS the Python 0-based index
-            │         verified: det[1] → stage dist ≈ 86 µm from revisit coords
-            │                   det[0] → stage dist ≈ 548 µm  (wrong)
+            │         verified: det[1] -> stage dist ~86 um from revisit coords
+            │                   det[0] -> stage dist ~548 um  (wrong)
             │
             └── raw frame: chip_N/scan_10x/frame_0432.jpg
 ```
 
-**d_id is a 0-based direct array index into `detections[]`.**
-Verified empirically for ranks 01–05 and rank 04 (d28): `detections[d_id]` gives the
-centroid closest to the stage position in `revisit_50x.json["points"]` (residuals
-86–143 µm, consistent with parcentric shift at 50x).
+**`d_id` is a plain 0-based index into `detections[]`.** Nothing in the data
+documents this, so I checked it empirically on ranks 01 through 05 and on rank
+04 (d28). In every case `detections[d_id]` gives the centroid closest to the
+stage position recorded in `revisit_50x.json["points"]`, with residuals of 86 to
+143 µm, which is about what you'd expect from parcentric shift at 50x. Picking
+the wrong index puts you hundreds of microns off, so this is easy to tell apart.
 
-Error handling (in `io_utils.parse_revisit_label`):
+Error handling lives in `io_utils.parse_revisit_label`:
 
 | Failure | Behaviour |
 |---|---|
-| Label doesn't match regex | Raise `ValueError` with full label in message |
-| `seg/frame_NNNN.json` missing | Raise `FileNotFoundError` with path |
+| Label doesn't match regex | Raise `ValueError` with the full label in the message |
+| `seg/frame_NNNN.json` missing | Raise `FileNotFoundError` with the path |
 | `d_id >= len(detections)` | Raise `IndexError`: "d_id={d_id} but frame has {n} detections" |
-| `detections[d_id]` missing `contour` | Raise `KeyError` with field name and label |
-| Contour has < 3 points | Raise `ValueError`: "contour too small to form a mask" |
+| `detections[d_id]` missing `contour` | Raise `KeyError` with the field name and label |
+| Contour has fewer than 3 points | Raise `ValueError`: "contour too small to form a mask" |
 
-No silent skips anywhere. All errors propagate with the label in context.
+Nothing gets skipped silently anywhere. Every error carries the label with it.
 
 ### 0.2 Classification filtering policy
 
-Two separate policies — one per metric — documented here and as module-level
-docstrings in `lhrr.py` and `eop.py`.
+The two metrics need different policies here, so both are written up below and
+also as module docstrings in `lhrr.py` and `eop.py`.
 
-**LHRR — filter to target material:**
-LHRR is the "is this flake worth stacking?" signal. Computing it on a
-`classification = "non-hBN"` candidate in an hBN run is misleading.
-Default: check `detection["classification"]` against a per-material allowlist.
-If the classification is not in the allowlist, set all LHRR output fields to
-`null` and set `lhrr_skip_reason = "classification_mismatch"`.
+**LHRR filters to the target material.** LHRR is the "is this flake worth
+stacking" signal, so computing it on a candidate whose `classification` is
+`"non-hBN"` inside an hBN run doesn't mean much. The default behaviour checks
+`detection["classification"]` against a per-material allowlist, and if it isn't
+in the list, every LHRR output field is set to `null` with
+`lhrr_skip_reason = "classification_mismatch"`.
 
-Default allowlists (configurable constant `LHRR_CLASSIFICATION_ALLOWLIST` in
-`lhrr.py`):
+Default allowlists, configurable through `LHRR_CLASSIFICATION_ALLOWLIST` in
+`lhrr.py`:
+
 ```python
 LHRR_CLASSIFICATION_ALLOWLIST: dict[str, list[str]] = {
-    "hbn_medium":             None,   # None = accept all (lab to tighten once values are known)
+    "hbn_medium":             None,   # None = accept all
     "graphene_thin_90nm":     None,
 }
 ```
-`None` means no filtering (accept any classification string). The lab should
-update these once they have enumerated the classifier's full output vocabulary.
-Note: rank01 in chip_0 hBN is classified `"non-hBN"` but was still revisited
-at 50x (the pipeline's tier system uses different criteria). Setting `None`
-by default avoids silently discarding candidates.
 
-**EOP occupancy — include ALL detections regardless of classification:**
-A `"non-hBN"` flake still physically obstructs the stamp. The occupancy map
-must include every detection from every seg frame, irrespective of
-`classification`. This is documented at the top of `eop.py`:
+`None` means no filtering at all, so any classification string gets through.
+These should get tightened once someone has enumerated everything the
+classifier can actually emit. Worth noting that rank01 in chip_0 of the hBN run
+is classified `"non-hBN"` and was still revisited at 50x, because the
+pipeline's tier system uses different criteria. Defaulting to `None` avoids
+quietly throwing away candidates like that.
+
+**EOP occupancy includes every detection regardless of classification.** A
+`"non-hBN"` flake still physically blocks the stamp. So the occupancy map takes
+every detection from every seg frame no matter what it's classified as. This is
+documented at the top of `eop.py`:
+
 ```
 # EOP occupancy policy: ALL detections from all seg frames are included in the
 # chip occupancy mask, regardless of `classification`. Non-target material
@@ -84,37 +91,39 @@ must include every detection from every seg frame, irrespective of
 
 ### 0.3 Multi-run handling
 
-**One run at a time.** `flake_metrics.py` accepts a single run directory as
-`argv[1]`. The user runs it once per archive.
+**One run at a time.** `flake_metrics.py` takes a single run directory as
+`argv[1]` and gets run once per archive.
 
-Material is auto-detected per-chip from `chip_N/seg/summary.json →
-params.material`. Verified consistent across chips within a run
-(`hbn_medium` for all hBN chips, `graphene_thin_90nm` for all graphene chips).
-If a run has mixed materials (future-proof), each chip uses its own material
-string independently.
+Material is detected per chip from `chip_N/seg/summary.json -> params.material`.
+I checked and it's consistent across chips within a run (`hbn_medium` for all
+the hBN chips, `graphene_thin_90nm` for all the graphene ones), but each chip
+reads its own value independently in case a mixed run ever shows up.
 
-**Obstruction weight estimation** (for EOP) uses one formula across both materials:
+**Obstruction weight estimation** for EOP uses one formula for both materials:
+
 ```
 contrast_delta = |mean_green_flake_corrected - substrate_baseline_green|
 // raw delta accumulated per detection into obstruction_map
 // after all detections in the chip are processed:
-obstruction_weight = contrast_delta / max(contrast_delta_across_chip)   // normalised to [0, 1]
+obstruction_weight = contrast_delta / max(contrast_delta_across_chip)   // -> [0, 1]
 ```
-This is material-agnostic: hBN appears brighter than substrate (positive delta),
-graphene appears darker (negative delta, abs handles it). The per-chip
-normalisation keeps weights in [0, 1] regardless of illumination conditions.
-No material-specific calibration needed. (LHRR does not use obstruction weight.)
+
+This works either way round, since hBN reads brighter than the substrate
+(positive delta) and graphene reads darker (negative delta, and the absolute
+value handles it). Normalising per chip keeps the weights in [0, 1] whatever
+the illumination was like, so there's no material-specific calibration needed.
+LHRR doesn't use obstruction weight at all.
 
 ---
 
-## 1. LHRR — Largest Homogeneous Rectangular Region
+## 1. LHRR, Largest Homogeneous Rectangular Region
 
 ### 1.1 What it fixes
 
-Global entropy + gradient energy penalises a flake with a dirty edge even if
-its interior is pristine. LHRR finds the largest axis-aligned, defect-free
-sub-rectangle and reports that area and fraction, so the lab can rank by
-*usable* area rather than whole-flake score.
+Global entropy plus gradient energy penalises a flake with a dirty edge even
+when its interior is pristine. LHRR finds the largest axis-aligned defect-free
+sub-rectangle instead and reports its area and fraction, so the lab can rank by
+*usable* area rather than by a whole-flake score.
 
 ### 1.2 Pseudocode
 
@@ -137,8 +146,8 @@ FUNCTION compute_lhrr(chip_dir, label, flatfield, pixel_um, params):
   contour = det.contour                                 // [[x,y], ...] pixel coords
   mask = zeros(H, W, bool)
   cv2.fillPoly(mask, [np.int32(contour)], 1)
-  // Dilate slightly for border buffer (kernel = 5px) so border pixels
-  // don't contaminate variance statistics
+  // Dilate slightly (kernel = 5px) so border pixels don't contaminate
+  // the variance statistics
   mask_dilated = cv2.dilate(mask, kernel=5px_disk)
 
   // Step 3: crop to bounding box + padding
@@ -151,8 +160,8 @@ FUNCTION compute_lhrr(chip_dir, label, flatfield, pixel_um, params):
   mask_d_crop = mask_dilated[roi]
 
   // Step 4: local variance map on green channel
-  //   variance = E[X^2] - E[X]^2 computed via box filter (fast, O(N))
-  kernel_px = odd_round(VARIANCE_KERNEL_UM / pixel_um)   // default 5 µm -> 7 px
+  //   variance = E[X^2] - E[X]^2 via box filter (fast, O(N))
+  kernel_px = odd_round(VARIANCE_KERNEL_UM / pixel_um)   // default 5 um -> 7 px
   green_f32 = green_crop.astype(float32)
   mean_map  = cv2.filter2D(green_f32, kernel=box(kernel_px)) / kernel_px^2
   mean_sq   = cv2.filter2D(green_f32^2, kernel=box(kernel_px)) / kernel_px^2
@@ -187,7 +196,7 @@ FUNCTION compute_lhrr(chip_dir, label, flatfield, pixel_um, params):
 
 ### 1.3 Maximal rectangle algorithm
 
-Implemented from scratch in `src/lhrr.py`. Algorithm:
+Written from scratch in `src/lhrr.py`:
 
 ```
 FUNCTION max_rect_in_binary_mask(mask):
@@ -226,54 +235,61 @@ FUNCTION largest_rect_in_histogram(heights, row):
   RETURN best
 ```
 
-Why this over alternatives:
-- **Brute force O(N^2 * M^2)**: too slow for 1824×1216 crops.
-- **Rotating calipers / convex hull**: finds largest convex rectangle, not
-  axis-aligned. LHRR needs axis-aligned for stamp geometry.
-- **Iterative erosion**: approximate and slow.
-- **Histogram method O(R*C)**: exact, fast, well-understood.
+Why this and not something else:
+
+- **Brute force** at O(N² M²) is far too slow for 1824x1216 crops.
+- **Rotating calipers / convex hull** gives the largest convex rectangle, which
+  isn't necessarily axis-aligned. LHRR needs axis-aligned because that's the
+  stamp geometry.
+- **Iterative erosion** is both approximate and slow.
+- **Histogram method** at O(R*C) is exact, fast, and well understood.
 
 ### 1.4 Tunable parameters
 
 | Constant | Default | Meaning |
 |---|---|---|
-| `VARIANCE_KERNEL_UM` | `5.0` | Spatial scale of surface-defect detection (µm). 5 µm ≈ 7 px. Use smaller to catch fine contamination; larger to ignore it. |
-| `VARIANCE_PERCENTILE` | `50` | Percentile of in-mask variance used as clean/dirty threshold. Lower = stricter (smaller LHRR). Empirically validated at p25/p50/p75 on chip_0 hBN; p50 chosen — see §1.7. |
-| `CROP_PAD_PX` | `30` | Padding around detection bbox for variance computation context. |
-| `LHRR_CLASSIFICATION_ALLOWLIST` | `{material: None}` | Per-material classification strings to accept. `None` = accept all. |
+| `VARIANCE_KERNEL_UM` | `5.0` | Spatial scale of surface-defect detection in µm. 5 µm is about 7 px. Smaller catches finer contamination, larger ignores it. |
+| `VARIANCE_PERCENTILE` | `50` | Percentile of in-mask variance used as the clean/dirty threshold. Lower is stricter, so smaller LHRR. Tested at p25/p50/p75 on chip_0 hBN, see §1.7. |
+| `CROP_PAD_PX` | `30` | Padding around the detection bbox so variance has context. |
+| `LHRR_CLASSIFICATION_ALLOWLIST` | `{material: None}` | Per-material classification strings to accept. `None` accepts all. |
 
 ### 1.5 Failure modes and detection
 
 | Failure mode | Detection | Result |
 |---|---|---|
-| Entire flake is dirty (low-contrast substrate) | `lhrr_fraction < 0.05` | Valid result; low fraction signals problem |
-| Flake smaller than kernel | `det.size_px < kernel_px^2` | Log warning; reduce kernel to 3×3 and retry |
-| Contour self-intersects | `cv2.fillPoly` handles this | No special action needed |
-| All variance below threshold | All pixels clean; LHRR = full flake bbox ∩ mask | Valid result |
-| Raw frame missing from disk | `FileNotFoundError` with path | Propagate, skip chip with error log |
+| Whole flake is dirty (low-contrast substrate) | `lhrr_fraction < 0.05` | Valid result, low fraction is the signal |
+| Flake smaller than the kernel | `det.size_px < kernel_px^2` | Log a warning, drop to a 3x3 kernel and retry |
+| Contour self-intersects | `cv2.fillPoly` handles it | Nothing special needed |
+| All variance below threshold | Everything clean, LHRR = full bbox ∩ mask | Valid result |
+| Raw frame missing from disk | `FileNotFoundError` with the path | Propagate, skip the chip with an error log |
 
 ### 1.6 Validation example
 
-**Flake selection from chip_0 hBN — size-based (queried from seg JSONs):**
-- **Small:** `rank04_frame_0389_d28` — 505 µm² (actual smallest candidate in chip_0)
-- **Median:** `rank13_frame_0149_d5` — 978 µm² (actual median by area, index 10 of 21)
-- **Large:** `rank02_frame_0257_d2` — 4556 µm² (actual largest candidate in chip_0)
+Three flakes from chip_0 of the hBN run, picked by actual `size_um2` queried
+out of the seg JSONs before writing any metric code:
 
-For each, generate `outputs/lhrr/chip_0_{label}.png` with 4 panels before
-scaling to all chips.
+- **Small:** `rank04_frame_0389_d28`, 505 µm², the smallest candidate in chip_0
+- **Median:** `rank13_frame_0149_d5`, 978 µm², the median by area (index 10 of 21)
+- **Large:** `rank02_frame_0257_d2`, 4556 µm², the largest candidate in chip_0
 
-**Pass/fail criteria for the 4-panel figure:**
-1. Panel 1 (corrected + mask): mask outline should align with visible flake boundary
-2. Panel 2 (variance heatmap): bright spots should correspond to visually dirty regions
-3. Panel 3 (clean mask): should be a non-trivial region inside the flake, not empty, not the whole flake
-4. Panel 4 (LHRR bbox): bbox must be fully inside the clean mask and clearly axis-aligned
+Each one gets a 4-panel figure at `outputs/lhrr/chip_0_{label}.png` before
+anything gets scaled up to all the chips. What each panel has to show:
 
-If any panel fails visually, the metric is wrong — do not proceed to EOP.
+1. Panel 1 (corrected image plus mask): the mask outline should line up with the
+   visible flake boundary
+2. Panel 2 (variance heatmap): bright spots should correspond to regions that
+   look dirty
+3. Panel 3 (clean mask): a non-trivial region inside the flake, not empty and
+   not the entire flake
+4. Panel 4 (LHRR bbox): the box has to sit fully inside the clean mask and be
+   obviously axis-aligned
 
-### 1.7 Percentile calibration (empirical, chip_0 hBN)
+If any panel doesn't hold up visually then the metric is wrong and EOP waits.
 
-A sensitivity sweep at p25 / p50 / p75 was run on the three validation flakes.
-Results (LHRR area, strict-interior threshold sampling — see §1.7a):
+### 1.7 Percentile calibration (chip_0 hBN)
+
+Sweep at p25 / p50 / p75 on the three validation flakes, using strict-interior
+threshold sampling (see §1.7a):
 
 | Flake | p25 area | p25 frac | p50 area | p50 frac | p75 area | p75 frac |
 |---|---|---|---|---|---|---|
@@ -281,41 +297,41 @@ Results (LHRR area, strict-interior threshold sampling — see §1.7a):
 | median (978 µm²)  |  74 µm² | 0.076 | 109 µm² | 0.112 | 197 µm² | 0.202 |
 | large  (4556 µm²) | 166 µm² | 0.037 | 469 µm² | 0.103 | 1382 µm² | 0.303 |
 
-**p25** — Clean mask is fragmented (especially on the large flake with its noisy
-interior patches). LHRR undershoots the visually usable area; fractions are
-~4–8%.
+**p25** fragments the clean mask, worst on the large flake with its noisy
+interior patches. LHRR comes out under the visually usable area, fractions
+around 4 to 8%.
 
-**p50** — Clean mask is contiguous on all three flakes. LHRR rectangles land in
-the visually flat interior; fractions are ~10–20%, consistent with real hBN
-flakes whose edges are inherently rough. Chosen as default.
+**p50** keeps the clean mask contiguous on all three. The rectangles land in the
+flat interior and fractions sit around 10 to 20%, which is about right for real
+hBN flakes given how rough their edges naturally are. This is the default.
 
-**p75** — Threshold becomes permissive enough to accept genuine edge variance.
-On the large flake the LHRR box extends into the ragged border (frac=0.30).
+**p75** gets permissive enough to accept genuine edge variance. On the large
+flake the box extends into the ragged border at frac 0.30.
 
-**Decision:** `VARIANCE_PERCENTILE = 50`. Lab should re-run the sweep if a new
-material preset or illumination condition is introduced.
+**Decision:** `VARIANCE_PERCENTILE = 50`. Re-run the sweep if a new material
+preset or illumination condition comes in.
 
 #### 1.7a Threshold sampling fix
 
-Variance map is computed over the dilated-mask crop (so border pixels receive
-full box-filter context), but the percentile threshold is sampled from
-`var_map[mask_crop]` — strict interior only. Buffer pixels straddle the flake
-edge and have structurally elevated variance (~2.8× interior mean on the small
-flake); including them in the sample inflates or deflates the threshold depending
-on whether high-variance outliers pull the tail. Effect is flake-dependent:
-+6.3% on the small flake (modest), −6.9% on the large flake (meaningful,
-reduces clean-pixel count by 211). Fix is correct in principle and material on
-high-contrast-edge flakes.
+The variance map is computed over the dilated-mask crop so border pixels get
+full box-filter context, but the percentile threshold is sampled from
+`var_map[mask_crop]`, the strict interior only. Buffer pixels straddle the flake
+edge and have structurally higher variance, roughly 2.8x the interior mean on
+the small flake. Including them pulls the threshold around depending on whether
+high-variance outliers drag the tail, and the effect varies by flake: +6.3% on
+the small one, which is modest, and -6.9% on the large one, which costs 211
+clean pixels and is not modest. The fix is right in principle and matters in
+practice on flakes with high-contrast edges.
 
 ---
 
-## 2. EOP — Ease of Pickup
+## 2. EOP, Ease of Pickup
 
 ### 2.1 What it fixes
 
-A beautiful flake surrounded by tall neighbours is physically unusable — the
-stamp clips the neighbours during pickup. The current pipeline has no spatial
-awareness of neighbours. EOP surfaces this risk.
+A beautiful flake surrounded by tall neighbours is physically unusable, since
+the stamp clips the neighbours on the way down. The current pipeline has no
+spatial awareness of neighbours at all, so EOP is what surfaces that risk.
 
 ### 2.2 Pseudocode
 
@@ -326,7 +342,7 @@ FUNCTION build_chip_occupancy(chip_dir, flatfield, pixel_um, params):
   meta = load_scan_meta(chip_dir/scan_10x/scan_meta.json)
   x_min, x_max = meta.x_min_um, meta.x_max_um
   y_min, y_max = meta.y_min_um, meta.y_max_um
-  stage_px = OCCUPANCY_STAGE_PX_UM   // default 5.0 µm/px (see §2.5 memory budget)
+  stage_px = OCCUPANCY_STAGE_PX_UM   // default 5.0 um/px, see §2.5
 
   // Allocate maps
   cols = ceil((x_max - x_min) / stage_px) + 1
@@ -334,7 +350,7 @@ FUNCTION build_chip_occupancy(chip_dir, flatfield, pixel_um, params):
   occ_map        = zeros(rows, cols, uint8)     // 255 = occupied, 0 = empty
   obstruction_map = zeros(rows, cols, float32)  // raw contrast_delta, normalised later
 
-  // Substrate baseline: sample background from detection-masked frames (see §2.4)
+  // Substrate baseline: sample background from detection-masked frames, §2.4
   substrate_baseline = estimate_substrate_baseline(chip_dir, flatfield)
 
   // Accumulate ALL detections from all seg frames
@@ -363,7 +379,7 @@ FUNCTION build_chip_occupancy(chip_dir, flatfield, pixel_um, params):
           cv2.fillPoly(local_mask, [int32(det.contour)], 1)
           mean_green_flake = mean(green[local_mask])
           contrast_delta = abs(mean_green_flake - substrate_baseline)
-          // Write raw delta into obstruction_map (max-accumulate: strongest contrast wins)
+          // Write raw delta into obstruction_map (max-accumulate: strongest wins)
           map_mask = zeros(rows, cols, bool)
           cv2.fillPoly(map_mask, [map_contour], 1)
           obstruction_map = where(map_mask, maximum(obstruction_map, contrast_delta), obstruction_map)
@@ -390,12 +406,12 @@ FUNCTION compute_eop(candidate_label, chip_dir, occ_map, obstruction_map,
   cand_mask = zeros_like(occ_map, bool)
   cv2.fillPoly(cand_mask, [cand_map_contour], 1)
 
-  // Clearance: distance from candidate boundary to nearest OTHER detection
+  // Clearance: distance from candidate boundary to nearest OTHER detection.
   // Remove candidate from occupancy, run distance transform on free space.
   occ_without_cand = occ_map.copy()
   occ_without_cand[cand_mask] = 0
   // ~occ_without_cand: uint8 bitwise NOT. occ_map is {0, 255}, so ~255 = 0 and
-  // ~0 = 255 in uint8 arithmetic — free space (0) becomes 255 (foreground for
+  // ~0 = 255 in uint8 arithmetic. Free space (0) becomes 255 (foreground for
   // distanceTransform), occupied pixels (255) become 0 (barrier). Correct polarity.
   dist_map = cv2.distanceTransform(~occ_without_cand, cv2.DIST_L2, 5)
   // Sample dist_map at candidate boundary pixels
@@ -406,9 +422,9 @@ FUNCTION compute_eop(candidate_label, chip_dir, occ_map, obstruction_map,
   // Weighted obstruction: sum over non-candidate pixels in obstruction_map
   // within MAX_OBSTRUCTION_RADIUS_UM of candidate centroid.
   // Iterate only pixels where:
-  //   (obstruction_map > 0)        — non-empty
-  //   AND (cand_mask == 0)         — exclude the candidate itself
-  //   AND (d_j_um <= MAX_OBSTRUCTION_RADIUS_UM)  — bounded radius
+  //   (obstruction_map > 0)        non-empty
+  //   AND (cand_mask == 0)         exclude the candidate itself
+  //   AND (d_j_um <= MAX_OBSTRUCTION_RADIUS_UM)  bounded radius
   // For each such pixel j at stage distance d_j_um from stage_center:
   //   weighted_obstruction += obstruction_map[j] / max(d_j_um, 1)^2
   // Implemented via a bounding-box crop around the candidate centroid to
@@ -426,36 +442,37 @@ FUNCTION compute_eop(candidate_label, chip_dir, occ_map, obstruction_map,
   RETURN clearance_um, weighted_obstruction, eop_score
 ```
 
-### 2.3 EOP score formula and justification
+### 2.3 EOP score formula and why
 
 ```
 eop_score = clearance_um / (1 + weighted_obstruction)
 ```
 
-- **Numerator** `clearance_um`: the gap between the candidate's physical edge
-  and the nearest obstruction. A stamp typically needs ≥50 µm clearance to
-  avoid clipping; scores below 50 are physically marginal.
-- **Denominator** `1 + weighted_obstruction`: penalises by cumulative thickness
-  of neighbours weighted by their closeness. The `+1` prevents division-by-zero
-  and ensures that a flake with zero obstructions scores exactly `clearance_um`
-  (interpretable: "this many microns of safe working space").
-- **High score** = far from obstructions and/or obstructions are thin → easy pickup.
-- **Low score** = crowded or thick neighbours → risky pickup.
+The numerator, `clearance_um`, is the gap between the candidate's physical edge
+and the nearest obstruction. A stamp generally wants at least 50 µm to avoid
+clipping, so anything under 50 is physically marginal.
 
-Documented as a module-level docstring at the top of `src/eop.py`.
+The denominator, `1 + weighted_obstruction`, penalises by how much neighbour
+material there is, weighted by how close it is. The `+1` keeps it from dividing
+by zero and also means a flake with no obstructions at all scores exactly
+`clearance_um`, which reads nicely as "this many microns of safe working space".
+
+So a high score means far from obstructions, or obstructions that are thin, or
+both. A low score means crowded or thick neighbours. This goes in the
+module-level docstring at the top of `src/eop.py`.
 
 ### 2.4 Substrate baseline estimation
 
 ```
 FUNCTION estimate_substrate_baseline(chip_dir, flatfield):
   // Sample up to BASELINE_SAMPLE_FRAMES (default 20) frames.
-  // Prefer frames from the first and last 10% of the scan index range
-  // (chip edges are typically sparser — lower flake density).
+  // Prefer frames from the first and last 10% of the scan index range,
+  // since chip edges are usually sparser.
   //
   // For each sampled frame:
   //   1. corrected = apply_flatfield(cv2.imread(frame_jpg), flatfield)
   //   2. combined_mask = zeros(H, W, bool)
-  //      for each detection in seg/frame_NNNN.json (if file exists):
+  //      for each detection in seg/frame_NNNN.json (if the file exists):
   //          cv2.fillPoly(combined_mask, [int32(det.contour)], 1)
   //   3. free_pixels = corrected[:, :, GREEN][~combined_mask]
   //      if len(free_pixels) < MIN_BASELINE_PIXELS (default 1000):
@@ -464,78 +481,80 @@ FUNCTION estimate_substrate_baseline(chip_dir, flatfield):
   //
   // substrate_baseline = median(baseline_estimate_i across accepted frames)
   //
-  // Fallback: if fewer than 3 frames are accepted, use the
-  // 5th percentile of per-frame full-frame mean-green values
-  // (biased on dense chips but avoids a zero baseline).
-  // Log a warning if fallback is used.
+  // Fallback: if fewer than 3 frames are accepted, use the 5th percentile of
+  // per-frame full-frame mean-green values. Biased on dense chips but it
+  // avoids a zero baseline. Log a warning if the fallback fires.
 ```
 
-Masking detections before computing the mean removes flake pixels from the
-substrate estimate, which matters on dense chips where the naive frame mean
-would be pulled toward flake brightness.
+Masking out the detections before taking the mean is what keeps flake pixels
+out of the substrate estimate. On a dense chip a naive frame mean gets pulled
+toward flake brightness, which would quietly bias every contrast delta on that
+chip.
 
 ### 2.5 Memory budget
 
-Actual chip scan extents measured from `scan_meta.json` across all 8 chips:
+Actual chip scan extents, measured from `scan_meta.json` across all 8 chips:
 
 | Run | Chip | X range | Y range | At 5 µm/px | Uint8 MB |
 |---|---|---|---|---|---|
-| hBN | chip_0 | 33.8 mm | 15.4 mm | 6760×3080 | 20.8 |
-| hBN | chip_1 | 38.9 mm | 18.5 mm | 7780×3700 | 28.8 |
-| hBN | chip_2 | 28.6 mm | 18.5 mm | 5720×3700 | 21.2 |
-| hBN | chip_3 | 36.3 mm | 17.0 mm | 7260×3400 | 24.7 |
-| hBN | chip_4 | 33.9 mm | 13.1 mm | 6780×2620 | 17.8 |
-| hBN | chip_5 | 35.6 mm | 17.0 mm | 7120×3400 | 24.2 |
-| Gr  | chip_0 | 26.0 mm | 13.9 mm | 5200×2780 | 14.5 |
-| Gr  | chip_1 | 25.4 mm | 13.9 mm | 5080×2780 | 14.1 |
+| hBN | chip_0 | 33.8 mm | 15.4 mm | 6760x3080 | 20.8 |
+| hBN | chip_1 | 38.9 mm | 18.5 mm | 7780x3700 | 28.8 |
+| hBN | chip_2 | 28.6 mm | 18.5 mm | 5720x3700 | 21.2 |
+| hBN | chip_3 | 36.3 mm | 17.0 mm | 7260x3400 | 24.7 |
+| hBN | chip_4 | 33.9 mm | 13.1 mm | 6780x2620 | 17.8 |
+| hBN | chip_5 | 35.6 mm | 17.0 mm | 7120x3400 | 24.2 |
+| Gr  | chip_0 | 26.0 mm | 13.9 mm | 5200x2780 | 14.5 |
+| Gr  | chip_1 | 25.4 mm | 13.9 mm | 5080x2780 | 14.1 |
 
-**At 5 µm/stage-px**: occupancy map (uint8) = 14–29 MB per chip. Obstruction map
-(float32) = 56–116 MB per chip. Both are processed one chip at a time and
-discarded after EOP scores are written.
+At 5 µm per stage pixel the occupancy map (uint8) is 14 to 29 MB per chip and
+the obstruction map (float32) is 56 to 116 MB. Both get processed one chip at a
+time and thrown away once the EOP scores are written.
 
-**Why NOT 2 µm/stage-px (as given in the spec as an example):**
-At 2 µm/px the occupancy map alone is 90–180 MB per chip; obstruction map
-(float32) would be 360–720 MB. For 6 chips simultaneously that's multi-GB.
-5 µm/px is well above the nyquist for stamp geometry (~100 µm stamp, ~50 µm
-target clearance threshold) and is safely within budget on a typical workstation.
-The stage_px resolution is exposed as `OCCUPANCY_STAGE_PX_UM` (default `5.0`)
-so the lab can tighten it if they have the RAM.
+The spec gave 2 µm/px as an example and I'm not using it. At that resolution
+the occupancy map alone is 90 to 180 MB per chip and the obstruction map would
+be 360 to 720 MB, so six chips at once is multiple gigabytes. 5 µm/px is still
+well above what the geometry needs, given a stamp around 100 µm and a clearance
+threshold around 50 µm, and it fits comfortably on a normal workstation. It's
+exposed as `OCCUPANCY_STAGE_PX_UM` so the lab can tighten it if they have the
+RAM to spare.
 
 ### 2.6 Tunable parameters
 
 | Constant | Default | Meaning |
 |---|---|---|
-| `OCCUPANCY_STAGE_PX_UM` | `5.0` | Occupancy map resolution (µm/px). |
-| `MAX_OBSTRUCTION_RADIUS_UM` | `500.0` | Radius for weighted_obstruction sum. |
-| `BASELINE_SAMPLE_FRAMES` | `20` | Max frames for substrate baseline estimate. |
+| `OCCUPANCY_STAGE_PX_UM` | `5.0` | Occupancy map resolution in µm/px. |
+| `MAX_OBSTRUCTION_RADIUS_UM` | `500.0` | Radius for the weighted_obstruction sum. |
+| `BASELINE_SAMPLE_FRAMES` | `20` | Max frames for the substrate baseline estimate. |
 | `EOP_MIN_CLEARANCE_UM` | `50.0` | Below this, flag `clearance_warning = True`. |
 
 ### 2.7 Failure modes
 
 | Failure mode | Detection | Result |
 |---|---|---|
-| Candidate contour projects outside map bounds | Clip and log warning | Reduced accuracy but continues |
-| All frames have detections (no clean baseline) | Fall back to 5th percentile of frame means | Log fallback |
-| Candidate has no boundary pixels (1px flake) | `clearance_um = 0` | Valid; will rank last |
-| dist_map all-zero (entire map occupied) | `clearance_um = 0` | Valid; extreme case |
+| Candidate contour projects outside map bounds | Clip and log a warning | Less accurate but keeps going |
+| Every frame has detections, no clean baseline | Fall back to 5th percentile of frame means | Log the fallback |
+| Candidate has no boundary pixels (1px flake) | `clearance_um = 0` | Valid, it'll rank last |
+| dist_map is all zero (whole map occupied) | `clearance_um = 0` | Valid, extreme case |
 
 ### 2.8 Validation example
 
-Same three flakes as LHRR validation (chip_0, size-based selection):
+Same three flakes as the LHRR validation:
+
 - **Small:** `rank04_frame_0389_d28` (505 µm²)
 - **Median:** `rank13_frame_0149_d5` (978 µm²)
 - **Large:** `rank02_frame_0257_d2` (4556 µm²)
 
-For each, save `outputs/eop/chip_0_{label}.png` with:
-- Chip occupancy map with candidate in green, all other detections in red
-- Text annotation: `clearance={X:.0f} um  obstruction={Y:.2f}  eop={Z:.1f}`
+Each gets `outputs/eop/chip_0_{label}.png` with the chip occupancy map,
+candidate in green and every other detection in red, plus a text annotation
+reading `clearance={X:.0f} um  obstruction={Y:.2f}  eop={Z:.1f}`.
 
-Expected outcome: the three candidates should show meaningfully different
-surroundings in the occupancy map, and EOP scores should rank them accordingly.
+What I expect to see is three candidates with visibly different surroundings on
+the occupancy map, and EOP scores that rank them the way the pictures suggest
+they should be ranked.
 
 ---
 
-## 3. Integration — `flake_metrics.py`
+## 3. Integration, `flake_metrics.py`
 
 ### 3.1 Processing flow
 
@@ -551,7 +570,7 @@ FOR each chip_N in run_dir (sorted):
     n_candidates = len(candidates)
 
     // EOP Phase 1: build occupancy + obstruction maps (reads all seg frames + JPEGs)
-    // NOTE: this step takes ~10-15 min per run; prints per-frame progress to stdout.
+    // NOTE: takes ~10-15 min per run, prints per-frame progress to stdout.
     occ_map, obstruction_map, map_meta = build_chip_occupancy(chip_N, ...)
 
     // Save occupancy QC image
@@ -587,22 +606,22 @@ composite = COMPOSITE_W_LHRR * lhrr_area_norm
           + COMPOSITE_W_EOP  * eop_score_normalised
 ```
 
-Where:
-- `lhrr_area_norm = lhrr_area_um2 / max(lhrr_area_um2 across all candidates in run)`
-- `eop_score_normalised = eop_score / max(eop_score across all candidates in run)`
+where `lhrr_area_norm = lhrr_area_um2 / max(lhrr_area_um2 across the run)` and
+`eop_score_normalised = eop_score / max(eop_score across the run)`. Both get
+normalised after all the chips are done, using run-wide maxima.
 
-Both normalised after processing all chips, using run-wide maxima.
-`lhrr_fraction` (area / total flake area) is retained in the per-candidate JSON
-for diagnostic use but is not the ranking signal — fraction conflates flake size
-with cleanliness and would bias ranking toward smaller, uniformly-dirty flakes.
-`lhrr_area_norm` ranks by absolute usable area, which is what the lab cares about.
+`lhrr_fraction` (area over total flake area) stays in the per-candidate JSON as
+a diagnostic but it isn't the ranking signal. Fraction mixes flake size
+together with cleanliness, which would bias the ranking toward small flakes
+that happen to be uniformly dirty. `lhrr_area_norm` ranks by absolute usable
+area instead, which is the thing the lab actually cares about.
 
-Default weights: `COMPOSITE_W_LHRR = 0.5`, `COMPOSITE_W_EOP = 0.5`.
-Documented at the top of `flake_metrics.py`. Both weights are constants.
+Default weights are `COMPOSITE_W_LHRR = 0.5` and `COMPOSITE_W_EOP = 0.5`, both
+constants at the top of `flake_metrics.py`.
 
-**Note:** composite scores are run-relative — the best candidate in any run
-scores near 1.0 by construction (both normalised terms max at 1.0). Scores
-are not directly comparable across runs or material presets.
+One consequence worth stating: composite scores are run-relative, so the best
+candidate in any run scores near 1.0 by construction. They aren't directly
+comparable across runs or material presets.
 
 ---
 
@@ -616,7 +635,7 @@ src/
     apply_flatfield(raw, ff)           -> corrected uint8
     build_flake_mask(det, H, W)        -> bool ndarray
     project_contour_to_stage(...)      -> float32 ndarray
-    pixel_bbox_to_stage(...)           -> (x, y, w, h) in µm
+    pixel_bbox_to_stage(...)           -> (x, y, w, h) in um
     load_scan_meta(path)               -> dict (cached)
 
   lhrr.py
@@ -632,8 +651,8 @@ src/
     # EOP occupancy policy: ALL detections from all seg frames are included in the
     # chip occupancy mask, regardless of `classification`. Non-target material
     # physically obstructs stamp pickup just as much as target material.
-    # obstruction_map is a visibility-based proxy for obstruction risk — it uses
-    # optical contrast magnitude as a proxy for physical height, normalised per chip.
+    # obstruction_map is a visibility-based proxy for obstruction risk. It uses
+    # optical contrast magnitude as a stand-in for physical height, normalised per chip.
     OCCUPANCY_STAGE_PX_UM = 5.0
     MAX_OBSTRUCTION_RADIUS_UM = 500.0
     BASELINE_SAMPLE_FRAMES = 20
@@ -650,18 +669,18 @@ src/
 
 ---
 
-## 5. Specific test flakes for validation
+## 5. Test flakes for validation
 
-All from `chip_0` of the hBN run (SF121 D-J, `run_20260505_1616`).
-Chosen by actual `size_um2` queried from seg JSONs before implementation —
-these are the ground truth for all diagnostic figures.
+All from `chip_0` of the hBN run (SF121 D-J, `run_20260505_1616`), chosen by
+actual `size_um2` queried from the seg JSONs before implementation started.
+These are the ground truth for every diagnostic figure.
 
-| Flake | Label | `size_um2` | Selection method |
+| Flake | Label | `size_um2` | How it was chosen |
 |---|---|---|---|
-| Small | `rank04_frame_0389_d28` | 505 µm² | Actual smallest candidate in chip_0 |
-| Median | `rank13_frame_0149_d5` | 978 µm² | Actual median by area (index 10 of 21) |
-| Large | `rank02_frame_0257_d2` | 4556 µm² | Actual largest candidate in chip_0 |
+| Small | `rank04_frame_0389_d28` | 505 µm² | Smallest candidate in chip_0 |
+| Median | `rank13_frame_0149_d5` | 978 µm² | Median by area (index 10 of 21) |
+| Large | `rank02_frame_0257_d2` | 4556 µm² | Largest candidate in chip_0 |
 
-For LHRR: 4-panel figure per flake saved before any batch processing.
-For EOP: chip-level occupancy + candidate highlight per flake saved before batch.
-Both must be visually convincing before scaling up.
+LHRR gets a 4-panel figure per flake before any batch processing. EOP gets a
+chip-level occupancy plus candidate highlight per flake, also before batch.
+Both have to look convincing before anything scales up.

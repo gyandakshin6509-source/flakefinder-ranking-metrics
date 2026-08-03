@@ -1,5 +1,5 @@
 """
-flake_metrics.py — runnable entrypoint for the FlakeFinder ranking-metrics
+flake_metrics.py: runnable entrypoint for the FlakeFinder ranking-metrics
 extension.
 
 Computes LHRR + EOP for every revisit_50x candidate on every chip of one run.
@@ -128,7 +128,7 @@ def _process_chip(
     save_chip_occupancy_qc(
         chip_data,
         qc_path,
-        title=f"{chip_dir.name} {material} — {chip_data['n_detections']} detections",
+        title=f"{chip_dir.name} {material}: {chip_data['n_detections']} detections",
     )
     print(f"  occupancy QC -> {qc_path}")
 
@@ -158,11 +158,11 @@ def _process_chip(
 
         a = lhrr_res.get("lhrr_area_um2")
         e = eop_res.get("eop_score")
-        a_str = f"{a:.0f} µm²" if a is not None else "—"
-        e_str = f"{e:.1f}" if e is not None else "—"
+        a_str = f"{a:.0f} µm²" if a is not None else "-"
+        e_str = f"{e:.1f}" if e is not None else "-"
         flag = lhrr_res.get("lhrr_quality_flag") or "?"
         warn = eop_res.get("clearance_warning")
-        warn_str = "WARN" if warn else ("ok" if warn is False else "—")
+        warn_str = "WARN" if warn else ("ok" if warn is False else "-")
         print(f"  {label:<28} lhrr={a_str:>11} ({flag:<8}) eop={e_str:>6} {warn_str}")
 
     chip_meta = {
@@ -239,7 +239,7 @@ def _write_csv(records: list[dict[str, Any]], path: Path) -> None:
 def _print_run_summary(run_name: str, records: list[dict[str, Any]]) -> None:
     n = len(records)
     print("\n" + "=" * 78)
-    print(f"Run summary — {run_name}")
+    print(f"Run summary: {run_name}")
     print("=" * 78)
     print(f"  candidates processed   : {n}")
     if n == 0:
@@ -275,8 +275,8 @@ def _print_run_summary(run_name: str, records: list[dict[str, Any]]) -> None:
     for r in records[:5]:
         a = r.get("lhrr_area_um2")
         e = r.get("eop_score")
-        a_str = f"{a:.0f}" if a is not None else "—"
-        e_str = f"{e:.1f}" if e is not None else "—"
+        a_str = f"{a:.0f}" if a is not None else "-"
+        e_str = f"{e:.1f}" if e is not None else "-"
         print(f"    {r.get('rank_in_run', '?'):>2} {r['chip']:<8} {r['label']:<28} "
               f"lhrr={a_str:>6} eop={e_str:>6} composite={r['composite_score']:.4f}")
 

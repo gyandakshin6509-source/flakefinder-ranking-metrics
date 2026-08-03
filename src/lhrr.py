@@ -1,5 +1,5 @@
 """
-lhrr.py — Largest Homogeneous Rectangular Region metric.
+lhrr.py: Largest Homogeneous Rectangular Region metric.
 
 For each candidate flake, finds the largest axis-aligned rectangle fully
 contained within the clean (low-variance) region of the flake interior.
@@ -11,7 +11,7 @@ Classification policy:
   classification is not in LHRR_CLASSIFICATION_ALLOWLIST[material],
   all output fields are set to None and lhrr_skip_reason is set to
   "classification_mismatch". Setting the allowlist value to None accepts
-  all classifications (default — the lab should tighten once the
+  all classifications (default: the lab should tighten once the
   classifier's full output vocabulary is known).
 """
 
@@ -46,7 +46,7 @@ CROP_PAD_PX: int = 30
 # Minimum effective LHRR side length (µm) for the "usable" quality flag,
 # per material preset. The default value (20 µm) was calibrated against hBN;
 # graphene flakes are typically smaller, so a tighter threshold differentiates
-# the population. Both values are conservative — the lab should re-tune to
+# the population. Both values are conservative, and the lab should re-tune to
 # their actual stamp tolerances.
 LHRR_USEFUL_THRESHOLD_UM_BY_MATERIAL: dict[str, float] = {
     "hbn_medium":         20.0,

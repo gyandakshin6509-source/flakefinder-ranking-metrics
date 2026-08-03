@@ -1,5 +1,5 @@
 """
-qc_run.py — comprehensive QC pass before lab handoff.
+qc_run.py: comprehensive QC pass before lab handoff.
 
 Runs ten checks against the current state of the repo + outputs/.
 Writes the consolidated report to outputs/qc_report.md. Does not modify any
@@ -125,15 +125,15 @@ def _read_json(path: Path) -> dict:
 
 
 def _status(level: str, msg: str) -> str:
-    return f"**{level}** — {msg}"
+    return f"**{level}**: {msg}"
 
 
 # ---------------------------------------------------------------------------
-# CHECK 1 — Schema completeness
+# CHECK 1: Schema completeness
 # ---------------------------------------------------------------------------
 
 def check_1_schema() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 1 — Schema completeness", ""]
+    out: list[str] = ["## CHECK 1: Schema completeness", ""]
     issues: list[str] = []
 
     # CSV side
@@ -152,7 +152,7 @@ def check_1_schema() -> tuple[str, list[str]]:
         missing = [c for c in EXPECTED_CSV_COLUMNS if c not in cols]
         if extra or missing:
             issues.append(f"{csv_path.name}: schema mismatch")
-        out.append(f"- `{csv_path.name}` — {len(cols)} columns")
+        out.append(f"- `{csv_path.name}`: {len(cols)} columns")
         if extra:
             out.append(f"    - extra: {extra}")
         if missing:
@@ -184,7 +184,7 @@ def check_1_schema() -> tuple[str, list[str]]:
             if top_extra or top_missing or occ_extra or occ_missing:
                 note = "MISMATCH"
                 issues.append(f"{jp.name}: schema mismatch")
-            out.append(f"- `{jp.name}` — top: {note}")
+            out.append(f"- `{jp.name}`, top: {note}")
             if top_extra:
                 out.append(f"    - top extra: {sorted(top_extra)}")
             if top_missing:
@@ -235,11 +235,11 @@ def check_1_schema() -> tuple[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# CHECK 2 — Range validation
+# CHECK 2: Range validation
 # ---------------------------------------------------------------------------
 
 def check_2_ranges() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 2 — Range validation", ""]
+    out: list[str] = ["## CHECK 2: Range validation", ""]
     issues: list[str] = []
 
     all_rows: list[dict] = []
@@ -356,11 +356,11 @@ def check_2_ranges() -> tuple[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# CHECK 3 — Candidate completeness (no silent drops)
+# CHECK 3: Candidate completeness (no silent drops)
 # ---------------------------------------------------------------------------
 
 def check_3_completeness() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 3 — Candidate completeness", ""]
+    out: list[str] = ["## CHECK 3: Candidate completeness", ""]
     issues: list[str] = []
     out.append("| run | chip | revisit_50x.json points | metrics JSON candidates | CSV rows | match? |")
     out.append("|---|---|---|---|---|---|")
@@ -389,14 +389,14 @@ def check_3_completeness() -> tuple[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# CHECK 4 — Determinism (re-run graphene + diff)
+# CHECK 4: Determinism (re-run graphene + diff)
 # ---------------------------------------------------------------------------
 
 def check_4_determinism() -> tuple[str, list[str], dict[str, Any]]:
     """Returns (status, lines, cached_chip_data) where cached_chip_data is a
     dict {chip_name: chip_data} for graphene chips, kept in memory so that
     CHECK 7 can reuse them and avoid rebuilding."""
-    out: list[str] = ["## CHECK 4 — Determinism", ""]
+    out: list[str] = ["## CHECK 4: Determinism", ""]
     issues: list[str] = []
 
     QC_RERUN.mkdir(parents=True, exist_ok=True)
@@ -493,7 +493,7 @@ def check_4_determinism() -> tuple[str, list[str], dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# CHECK 5 — README / code constants alignment
+# CHECK 5: README / code constants alignment
 # ---------------------------------------------------------------------------
 
 def _module_constants(path: Path) -> list[str]:
@@ -515,7 +515,7 @@ def _module_constants(path: Path) -> list[str]:
 
 
 def check_5_readme_alignment() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 5 — README / code constants alignment", ""]
+    out: list[str] = ["## CHECK 5: README / code constants alignment", ""]
     issues: list[str] = []
 
     readme_text = README.read_text(encoding="utf-8")
@@ -569,17 +569,17 @@ def check_5_readme_alignment() -> tuple[str, list[str]]:
     out.append("")
 
     status = "PASS" if not issues else "WARN"
-    out.insert(1, f"_{status}_  {len(issues)} issue(s) — these are documentation hygiene, not correctness")
+    out.insert(1, f"_{status}_  {len(issues)} issue(s): these are documentation hygiene, not correctness")
     out.insert(2, "")
     return status, out
 
 
 # ---------------------------------------------------------------------------
-# CHECK 6 — CLAUDE.md and plan.md alignment
+# CHECK 6: CLAUDE.md and plan.md alignment
 # ---------------------------------------------------------------------------
 
 def check_6_claude_plan() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 6 — CLAUDE.md and plan.md alignment", ""]
+    out: list[str] = ["## CHECK 6: CLAUDE.md and plan.md alignment", ""]
     issues: list[str] = []
 
     if not CLAUDE_MD.exists():
@@ -601,7 +601,7 @@ def check_6_claude_plan() -> tuple[str, list[str]]:
             if not present:
                 issues.append(f"CLAUDE.md missing: {desc}")
 
-        # Stale references — CLAUDE.md predates the per-material threshold
+        # Stale references: CLAUDE.md predates the per-material threshold
         material_aware = "LHRR_USEFUL_THRESHOLD_UM_BY_MATERIAL" in ctxt
         out.append(f"- mentions `LHRR_USEFUL_THRESHOLD_UM_BY_MATERIAL`: "
                    f"**{'yes' if material_aware else 'NO (added after CLAUDE.md was written)'}**")
@@ -668,14 +668,14 @@ def check_6_claude_plan() -> tuple[str, list[str]]:
         out.append("")
 
     status = "PASS" if not issues else "WARN"
-    out.insert(1, f"_{status}_  {len(issues)} discrepancy/discrepancies — "
+    out.insert(1, f"_{status}_  {len(issues)} discrepancy/discrepancies: "
                   f"documentation drift, not correctness")
     out.insert(2, "")
     return status, out
 
 
 # ---------------------------------------------------------------------------
-# CHECK 7 — Spot-check sample generation
+# CHECK 7: Spot-check sample generation
 # ---------------------------------------------------------------------------
 
 def _top_n(csv_path: Path, n: int = 5) -> list[dict]:
@@ -688,7 +688,7 @@ def _top_n(csv_path: Path, n: int = 5) -> list[dict]:
 
 
 def check_7_spotcheck() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 7 — Spot-check figure generation", ""]
+    out: list[str] = ["## CHECK 7: Spot-check figure generation", ""]
     issues: list[str] = []
     QC_SPOT.mkdir(parents=True, exist_ok=True)
 
@@ -758,11 +758,11 @@ def check_7_spotcheck() -> tuple[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# CHECK 8 — Edge case coverage
+# CHECK 8: Edge case coverage
 # ---------------------------------------------------------------------------
 
 def check_8_edges() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 8 — Edge case coverage", ""]
+    out: list[str] = ["## CHECK 8: Edge case coverage", ""]
     issues: list[str] = []
 
     all_rows: list[dict] = []
@@ -835,22 +835,22 @@ def check_8_edges() -> tuple[str, list[str]]:
     out.append("| bucket | count | examples |")
     out.append("|---|---|---|")
     for name, labels in buckets.items():
-        ex = ", ".join(labels[:3]) if labels else "—"
+        ex = ", ".join(labels[:3]) if labels else "-"
         out.append(f"| {name} | {len(labels)} | {ex} |")
     out.append("")
 
     status = "PASS"
-    out.insert(1, f"_{status}_  edge-case enumeration only — review counts")
+    out.insert(1, f"_{status}_  edge-case enumeration only: review counts")
     out.insert(2, "")
     return status, out
 
 
 # ---------------------------------------------------------------------------
-# CHECK 9 — Fresh-run simulation
+# CHECK 9: Fresh-run simulation
 # ---------------------------------------------------------------------------
 
 def check_9_fresh_run() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 9 — Fresh-run simulation", ""]
+    out: list[str] = ["## CHECK 9: Fresh-run simulation", ""]
     issues: list[str] = []
 
     req = PROJECT_ROOT / "requirements.txt"
@@ -913,7 +913,7 @@ def check_9_fresh_run() -> tuple[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
-# CHECK 10 — Lint / dead code
+# CHECK 10: Lint / dead code
 # ---------------------------------------------------------------------------
 
 def _used_names(tree: ast.AST) -> set[str]:
@@ -932,7 +932,7 @@ def _used_names(tree: ast.AST) -> set[str]:
 
 
 def check_10_lint() -> tuple[str, list[str]]:
-    out: list[str] = ["## CHECK 10 — Lint / dead code", ""]
+    out: list[str] = ["## CHECK 10: Lint / dead code", ""]
     issues: list[str] = []
 
     # pyflakes
@@ -1112,7 +1112,7 @@ def main() -> None:
         10: "Lint / dead code",
     }
     for i in range(1, 11):
-        report.append(f"| CHECK {i} — {titles[i]} | **{statuses.get(i, '?')}** |")
+        report.append(f"| CHECK {i}: {titles[i]} | **{statuses.get(i, '?')}** |")
     report.append("")
     report.append(f"**PASS: {counts['PASS']}  WARN: {counts['WARN']}  FAIL: {counts['FAIL']}**")
     report.append("")

@@ -1,5 +1,5 @@
 """
-diag_eop_resolution_only.py — Verify the area-integral fix for
+diag_eop_resolution_only.py: Verify the area-integral fix for
 weighted_obstruction by re-running the resolution sensitivity test for the
 three validation flakes at OCCUPANCY_STAGE_PX_UM = 5.0, 2.0, 1.0.
 

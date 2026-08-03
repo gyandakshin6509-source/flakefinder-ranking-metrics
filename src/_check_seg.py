@@ -1,5 +1,5 @@
 """
-_check_seg.py — quick schema probe for a chip's seg/ directory.
+_check_seg.py: quick schema probe for a chip's seg/ directory.
 
 Prints the count of seg JSONs vs. scan_10x JPGs and dumps the field set of
 one sample detection. Used during development to discover the seg detection
@@ -44,7 +44,7 @@ def main() -> None:
     print(f"chip: {chip}")
     print(f"seg JSONs: {len(seg)}  range: {seg[0].stem} .. {seg[-1].stem}")
     print(f"jpg files: {len(jpg)}  range: "
-          f"{jpg[0].stem if jpg else '—'} .. {jpg[-1].stem if jpg else '—'}")
+          f"{jpg[0].stem if jpg else '-'} .. {jpg[-1].stem if jpg else '-'}")
 
     sample = json.loads(seg[idx].read_text())
     dets = sample.get("detections", [])
